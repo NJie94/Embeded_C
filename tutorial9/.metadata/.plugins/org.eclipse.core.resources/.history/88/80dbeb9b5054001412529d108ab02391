@@ -1,0 +1,29 @@
+/*
+ * pwm.c
+ *
+ *  Created on: 14 Oct 2014
+ *      Author: podonoghue
+ */
+
+#include "derivative.h"
+#include "servo.h"
+
+/**
+ * Initialises the servo motor
+ * Initial position is middle (50%)
+ */
+
+void initServo() {
+	
+}
+
+/**
+ * Set servo position
+ *
+ * @param position Position to set (0-100)
+ *
+ */
+void setServoPosition(int position) {
+	
+}
+

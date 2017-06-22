@@ -1,0 +1,90 @@
+/*
+ * main implementation: use this 'C' sample to create your own application
+ *
+ */
+
+#include "derivative.h" /* include peripheral declarations */
+#include "utilities.h"
+
+// System clock frequency
+#define SYSTEM_CLOCK_FREQUENCY (48000000UL)
+// Choice of prescale value (FTM0_SC.PS)
+#define FTM0_PRESCALE_VALUE (7)
+#define FTM0_PRESCALE (1<<FTM0_PRESCALE_VALUE)
+#define FTM0_CLK_FREQUENCY (SYSTEM_CLOCK_FREQUENCY/FTM0_PRESCALE)
+#define ONE_MILLISECOND (FTM0_CLK_FREQUENCY/1000)
+#define WAVEFORM_HALFPERIOD (127*ONE_MILLISECOND)
+
+#if (WAVEFORM_HALFPERIOD>65535)
+#error "WAVEFORM_HALFPERIOD is too large"
+#endif
+
+volatile uint32_t inputDial = 0;
+
+void initialiseFTM0(void){
+	//Initialise FTM0.CH3 to drive pin
+	SIM_SCGC5 |= SIM_SCGC5_PORTC_MASK;
+	PORTC_PCR4 = PORT_PCR_MUX(4)|PORT_PCR_DSE_MASK;
+	
+	//enable clock to FTM0
+	SIM_SCGC6 |= SIM_SCGC6_FTM0_MASK;
+	
+	//common registers
+	FTM0_SC = FTM_SC_CLKS(0);
+	FTM0_CNTIN = 0;
+	FTM0_CNT = 0;
+	FTM0_MOD = 0XFFFF;
+	
+	//channel registers - OC-Toggle
+	FTM0_C3SC = FTM_CnSC_CHIE_MASK|FTM_CnSC_MSA_MASK|FTM_CnSC_ELSA_MASK;
+	
+	FTM0_C3V = FTM0_CNT + 100; //trigger at now + 100
+	
+	FTM0_SC = FTM_SC_CLKS(1)|FTM_SC_PS(FTM0_PRESCALE_VALUE);
+	
+	NVIC_EnableIrq(INT_FTM0);
+}
+
+void FTM0_IRQHandler(void){
+	//the pin is toggled by hardware
+	if((FTM0_STATUS & FTM_STATUS_CH3F_MASK) != 0){
+		//clear the interrupt request from FTM0.CH3
+		FTM0_STATUS =~FTM_STATUS_CH3F_MASK;
+		//Re-trigger at given period
+		FTM0_C3V += inputDial;
+	}
+	if((FTM0_STATUS &~(FTM_STATUS_CH3F_MASK)) != 0){
+		//unexpected interrupt - die here for debug
+		__asm("bkpt");
+	}
+}
+
+#define INPUT_DIAL_MASK	(0x7F<<0)
+#define BUTTON_MASK (1<<7)
+
+int main(void)
+{
+	//enable clock to port c
+	SIM_SCGC5 |= SIM_SCGC5_PORTC_MASK;
+	//set pins as GPIO pins
+	PORTC_PCR0 = PORT_PCR_MUX(1);
+	PORTC_PCR1 = PORT_PCR_MUX(1);
+	PORTC_PCR2 = PORT_PCR_MUX(1);
+	PORTC_PCR3 = PORT_PCR_MUX(1);
+	PORTC_PCR4 = PORT_PCR_MUX(1);
+	PORTC_PCR5 = PORT_PCR_MUX(1);
+	PORTC_PCR6 = PORT_PCR_MUX(1);
+	PORTC_PCR7 = PORT_PCR_MUX(1);
+	//set pins as inputs
+	GPIOC_PDDR &= ~INPUT_DIAL_MASK;
+	GPIOC_PDDR &= ~BUTTON_MASK;
+	
+	for(;;){
+		while(!(GPIOC_PDIR & BUTTON_MASK)){
+		}
+		inputDial = (GPIOC_PDIR & INPUT_DIAL_MASK);
+	}
+	if(inputDial != 0){
+		initialiseFTM0();
+	}	
+}
